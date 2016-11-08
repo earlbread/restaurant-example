@@ -1,4 +1,5 @@
 import cgi
+import re
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
 from sqlalchemy import create_engine
@@ -13,6 +14,8 @@ session = DBSession()
 
 class WebServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        edit_pattern = re.compile('/restaurant/(\d+)/edit')
+
         if self.path.endswith('/restaurant'):
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
@@ -48,11 +51,34 @@ class WebServerHandler(BaseHTTPRequestHandler):
                       <input type="submit">
                       </form>
                       '''
+            output += '</body></html>'
+            self.wfile.write(output)
+        elif edit_pattern.match(self.path):
+            restaurant_id = int(edit_pattern.match(self.path).groups()[0])
+
+            restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+
+            output = '<html><body>'
+            output += '<h1>%s</h1>' % restaurant.name
+            output += '''
+                      <form method="post" enctype="multipart/form-data" action="/restaurant/%s/edit">
+                      <input type="text" name="name" placeholder="%s">
+                      <input type="hidden" name="id" value="%s">
+                      <input type="submit">
+                      </form>
+                      ''' % (restaurant.id, restaurant.name, restaurant.id)
+            output += '</body></html>'
             self.wfile.write(output)
         else:
             self.send_error(404, 'File not found %s' % self.path)
 
     def do_POST(self):
+        edit_pattern = re.compile('/restaurant/(\d+)/edit')
+
         if self.path.endswith('/restaurant/new'):
             ctype, pdict = cgi.parse_header(
                 self.headers.getheader('content-type'))
@@ -65,6 +91,23 @@ class WebServerHandler(BaseHTTPRequestHandler):
                 session.add(new_restaurant)
                 session.commit()
 
+            self.send_response(301)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Location', '/restaurant')
+            self.end_headers()
+        elif edit_pattern.match(self.path):
+            ctype, pdict = cgi.parse_header(
+                self.headers.getheader('content-type'))
+            if ctype == 'multipart/form-data':
+                fields = cgi.parse_multipart(self.rfile, pdict)
+                restaurant_name = fields.get('name')
+                restaurant_id = fields.get('id')
+
+            if restaurant_name and restaurant_id:
+                restaurant = session.query(Restaurant).filter_by(id=restaurant_id[0]).one()
+                restaurant.name = restaurant_name[0]
+                session.add(restaurant)
+                session.commit()
             self.send_response(301)
             self.send_header('Content-Type', 'text/html')
             self.send_header('Location', '/restaurant')
