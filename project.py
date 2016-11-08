@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -15,19 +15,12 @@ app = Flask(__name__)
 @app.route('/')
 @app.route('/restaurants/<int:restaurant_id>/')
 def restaurant_menu(restaurant_id):
-    menus = session.query(MenuItem).filter_by(restaurant_id=restaurant_id).all()
+    restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
+    items = session.query(MenuItem).filter_by(restaurant_id=restaurant_id).all()
 
-    output = '<html><body>'
-
-    for menu in menus:
-        output += '<p>%s</p>' % menu.name
-        output += '<p>%s</p>' % menu.price
-        output += '<p>%s</p>' % menu.description
-        output += '<br>'
-
-    output += '</body></html>'
-
-    return output
+    return render_template('menu.html',
+                           restaurant=restaurant,
+                           items=items)
 
 
 @app.route('/restaurant/<int:restaurant_id>/new/')
