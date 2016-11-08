@@ -14,7 +14,8 @@ session = DBSession()
 
 class WebServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        edit_pattern = re.compile('/restaurant/(\d+)/edit')
+        edit_pattern = re.compile('/restaurant/(\\d+)/edit')
+        delete_pattern = re.compile('/restaurant/(\\d+)/delete')
 
         if self.path.endswith('/restaurant'):
             self.send_response(200)
@@ -32,9 +33,9 @@ class WebServerHandler(BaseHTTPRequestHandler):
                 output += '''
                           <p>
                             <a href="/restaurant/%s/edit">Edit</a>
-                            <a href="/restaurant/delete">Delete</a>
+                            <a href="/restaurant/%s/delete">Delete</a>
                           </p>
-                          ''' % restaurant.id
+                          ''' % (restaurant.id, restaurant.id)
 
             output += '</body></html>'
             self.wfile.write(output)
@@ -73,11 +74,30 @@ class WebServerHandler(BaseHTTPRequestHandler):
                       ''' % (restaurant.id, restaurant.name, restaurant.id)
             output += '</body></html>'
             self.wfile.write(output)
+        elif delete_pattern.match(self.path):
+            restaurant_id = int(delete_pattern.match(self.path).groups()[0])
+
+            restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+
+            output = '<html><body>'
+            output += '<h1>Are you sure you want to delete %s?</h1>' % restaurant.name
+            output += '''
+                      <form method="post" enctype="multipart/form-data" action="/restaurant/%s/delete">
+                      <input type="submit">
+                      </form>
+                      ''' % restaurant.id
+            output += '</body></html>'
+            self.wfile.write(output)
         else:
             self.send_error(404, 'File not found %s' % self.path)
 
     def do_POST(self):
         edit_pattern = re.compile('/restaurant/(\d+)/edit')
+        delete_pattern = re.compile('/restaurant/(\\d+)/delete')
 
         if self.path.endswith('/restaurant/new'):
             ctype, pdict = cgi.parse_header(
@@ -107,6 +127,24 @@ class WebServerHandler(BaseHTTPRequestHandler):
                 restaurant = session.query(Restaurant).filter_by(id=restaurant_id[0]).one()
                 restaurant.name = restaurant_name[0]
                 session.add(restaurant)
+                session.commit()
+            self.send_response(301)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Location', '/restaurant')
+            self.end_headers()
+        elif delete_pattern.match(self.path):
+            ctype, pdict = cgi.parse_header(
+                self.headers.getheader('content-type'))
+            if ctype == 'multipart/form-data':
+                fields = cgi.parse_multipart(self.rfile, pdict)
+
+            restaurant_id = int(delete_pattern.match(self.path).groups()[0])
+
+            restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
+
+            if restaurant:
+                restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
+                session.delete(restaurant)
                 session.commit()
             self.send_response(301)
             self.send_header('Content-Type', 'text/html')
