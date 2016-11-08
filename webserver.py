@@ -19,46 +19,56 @@ class WebServerHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             output = '<html><body>'
+            output += '<p><a href="/restaurant/new">Create new restaurant</a></p>'
 
             restaurants = session.query(Restaurant).all()
 
+
             for restaurant in restaurants:
-                output += '<h2>%s</h2>' % restaurant.name
+                output += restaurant.name
+                output += '''
+                          <p>
+                            <a href="/restaurant/%s/edit">Edit</a>
+                            <a href="/restaurant/delete">Delete</a>
+                          </p>
+                          ''' % restaurant.id
 
             output += '</body></html>'
             self.wfile.write(output)
-            print output
-        else:
-            self.send_error(404, 'File not found %s' % self.path)
-    def do_POST(self):
-        try:
-            self.send_response(301)
+        elif self.path.endswith('/restaurant/new'):
+            self.send_response(200)
             self.send_header('Content-Type', 'text/html')
             self.end_headers()
 
-            ctype, pdict = cgi.parse_header(
-                self.headers.getheader('content-type'))
-            print ctype, pdict
-            if ctype == 'multipart/form-data':
-                fields = cgi.parse_multipart(self.rfile, pdict)
-                messagecontent = fields.get('message')
-
             output = '<html><body>'
-            output += '<h2>Okay, how about this?</h2>'
-            output += '<h1>%s</h1>' % messagecontent[0]
-            output += '<h2>What would you like me to say?</h2>'
+            output += '<h1>Make a new restaurant</h1>'
             output += '''
-                      <form method="post" enctype="multipart/form-data" action="/hello">
-                        <input type="text" name="message">
-                        <input type="submit">
+                      <form method="post" enctype="multipart/form-data" action="/restaurant/new">
+                      <input type="text" name="name" placeholder="New restaraunt name">
+                      <input type="submit">
                       </form>
                       '''
-            output += '</body></html>'
             self.wfile.write(output)
-            print output
-        except:
-            pass
+        else:
+            self.send_error(404, 'File not found %s' % self.path)
 
+    def do_POST(self):
+        if self.path.endswith('/restaurant/new'):
+            ctype, pdict = cgi.parse_header(
+                self.headers.getheader('content-type'))
+            if ctype == 'multipart/form-data':
+                fields = cgi.parse_multipart(self.rfile, pdict)
+                restaurant_name = fields.get('name')
+
+            if restaurant_name:
+                new_restaurant = Restaurant(name=restaurant_name[0])
+                session.add(new_restaurant)
+                session.commit()
+
+            self.send_response(301)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Location', '/restaurant')
+            self.end_headers()
 
 def main():
     try:
